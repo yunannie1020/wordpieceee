@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>언어의 조각 : Masterpiece</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --bg: #121213; --card: #1a1a1b; --text: #ffffff; --border: #3a3a3c;
+            --primary: #538d4e;   /* Correct - 초록 */
+            --secondary: #b59f3b; /* Present - 노랑 */
+            --absent: #e74c3c;    /* Wrong - 빨강 */
+            --selected: #3498db; --empty: #121213;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Pretendard', sans-serif; }
+        body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+
+        .full-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: var(--bg); z-index: 2000; padding: 20px; display: none; flex-direction: column; justify-content: center; align-items: center; }
+        #auth-screen { display: flex; }
+        .card { background: var(--card); padding: 32px; border-radius: 20px; width: 100%; max-width: 360px; text-align: center; border: 1px solid var(--border); box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+        h1 { font-size: 1.8rem; margin: 0 0 20px; font-weight: 800; color: var(--selected); }
+        
+        input, textarea { background: var(--empty); border: 2px solid var(--border); color: #fff; padding: 14px; border-radius: 12px; width: 100%; margin-bottom: 12px; font-size: 1rem; outline: none; }
+        button { cursor: pointer; border: none; font-weight: bold; border-radius: 12px; transition: 0.2s; padding: 14px; font-size: 1rem; }
+        .btn-main { background: var(--selected); color: #fff; width: 100%; }
+        .btn-sub { background: none; color: #888; font-size: 0.85rem; margin-top: 12px; }
+
+        .lvl-btn { background: var(--card); border: 1px solid var(--border); color: #fff; margin-bottom: 10px; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 18px; }
+        .lvl-btn span { color: var(--selected); font-size: 0.8rem; }
+
+        header { padding: 10px 20px; display: none; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+        .stat-bar { font-size: 0.75rem; color: #888; display: flex; gap: 12px; margin-bottom: 10px; justify-content: center; width: 100%; }
+        .stat-bar b { color: var(--selected); }
+
+        #main-content { flex: 1; display: none; flex-direction: column; justify-content: center; align-items: center; padding: 10px; width: 100%; max-width: 500px; margin: 0 auto; }
+        
+        #answer-grid { display: flex; gap: 6px; justify-content: center; width: 100%; margin: 10px 0; }
+        .char-box { display: flex; flex-direction: column; gap: 4px; padding: 6px; background: var(--card); border-radius: 8px; border: 2px solid var(--border); flex: 1; max-width: 60px; transition: 0.3s; }
+        .slot { height: 32px; background: var(--empty); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 800; border: 1px solid #333; pointer-events: none; }
+
+        #inventory-container { background: #1a1a1b; border-top: 1px solid var(--border); padding: 15px; display: none; }
+        .inventory-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; max-width: 400px; margin: 0 auto; }
+        .tile { aspect-ratio: 1/1; background: var(--card); border: 2px solid var(--border); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+        .tile b { font-size: 1.2rem; }
+        .tile span { font-size: 0.65rem; color: var(--selected); font-weight: 900; }
+        .tile.selected { border-color: var(--selected); background: #2c3e50; box-shadow: 0 0 15px rgba(52, 152, 219, 0.4); transform: translateY(-4px); }
+
+        .controls { display: flex; gap: 8px; width: 100%; padding: 0 10px; margin-top: 15px; }
+        .btn-game { flex: 1; background: #444; color: #fff; }
+        .btn-submit { flex: 2; background: var(--primary); color: #fff; }
+
+        .res-correct { background: var(--primary) !important; border-color: var(--primary) !important; }
+        .res-present { background: var(--secondary) !important; border-color: var(--secondary) !important; }
+        .res-absent { background: var(--absent) !important; border-color: var(--absent) !important; }
+
+        .admin-section { width: 100%; text-align: left; margin-top: 20px; font-size: 0.8rem; color: #aaa; max-height: 250px; overflow-y: auto; background: #000; padding: 10px; border-radius: 10px; }
+    </style>
+</head>
+<body onclick="deselectTile()">
+
+<div id="auth-screen" class="full-screen" onclick="event.stopPropagation()">
+    <div class="card" id="login-box">
+        <h1>LOGIN</h1>
+        <input type="text" id="login-id" placeholder="ID">
+        <input type="password" id="login-pw" placeholder="PIN (4자)">
+        <button class="btn-main" onclick="handleLogin()">입장하기</button>
+        <button class="btn-sub" onclick="toggleAuth(true)">신규 가입하기</button>
+    </div>
+    <div class="card" id="signup-box" style="display:none;">
+        <h1>SIGN UP</h1>
+        <input type="text" id="signup-id" placeholder="사용할 ID">
+        <input type="text" id="signup-nick" placeholder="닉네임 (한글 가능)">
+        <input type="password" id="signup-pw" placeholder="PIN (4자)">
+        <button class="btn-main" style="background:var(--secondary)" onclick="handleSignup()">가입 완료</button>
+        <button class="btn-sub" onclick="toggleAuth(false)">로그인으로 돌아가기</button>
+    </div>
+</div>
+
+<div id="menu-screen" class="full-screen" onclick="event.stopPropagation()">
+    <h1 style="color:var(--selected)">언어의 조각</h1>
+    <p id="user-info" style="margin-bottom:20px; opacity:0.8;"></p>
+    <div style="width:100%; max-width:340px;">
+        <button class="lvl-btn" onclick="startGame(3)">3글자 퍼즐 <span id="rec-3">-</span></button>
+        <button class="lvl-btn" onclick="startGame(4)">4글자 퍼즐 <span id="rec-4">-</span></button>
+        <button class="lvl-btn" onclick="startGame(5)">5글자 퍼즐 <span id="rec-5">-</span></button>
+        <button class="lvl-btn" onclick="startGame(6)">6글자 퍼즐 <span id="rec-6">-</span></button>
+        <button class="lvl-btn" onclick="startGame(7)">7글자 퍼즐 <span id="rec-7">-</span></button>
+        <button onclick="openReview()" style="width:100%; background:#2c3e50; color:#fff; margin-top:10px;">⭐ 별점 및 후기 남기기</button>
+        <button onclick="renderAdmin()" id="admin-view-btn" style="width:100%; background:#000; color:var(--selected); margin-top:10px; display:none;">📊 관리자 패널</button>
+        <button onclick="location.reload()" style="width:100%; background:none; color:#ff4d4d; margin-top:20px; font-size:0.8rem;">로그아웃</button>
+    </div>
+</div>
+
+<div id="admin-screen" class="full-screen" onclick="event.stopPropagation()">
+    <div class="card" style="max-width: 500px;">
+        <h1>ADMIN</h1>
+        <button class="btn-main" onclick="copyInvite()" style="background:var(--secondary); margin-bottom:15px;">🔗 초대 링크 복사</button>
+        <div id="admin-data-list" class="admin-section"></div>
+        <button class="btn-sub" onclick="location.reload()">나가기</button>
+    </div>
+</div>
+
+<header id="game-header">
+    <h2 style="margin:0; color:var(--selected); font-size:1rem;">언어의 조각</h2>
+    <button onclick="goBack()" style="background:var(--absent); color:#fff; border-radius:8px; padding:6px 12px; font-size:0.8rem;">나가기</button>
+</header>
+<div id="main-content" onclick="event.stopPropagation()">
+    <div class="stat-bar">
+        <span>시도: <b id="stat-attempts">0</b></span>
+        <span>힌트: <b id="stat-hints">0</b></span>
+        <span id="cur-stage-txt"></span>
+    </div>
+    <div id="answer-grid"></div>
+    <div class="controls">
+        <button id="hint-btn" class="btn-game" onclick="giveHint()">힌트</button>
+        <button id="submit-btn" class="btn-submit" onclick="submitGuess()">제출하기</button>
+        <button id="reveal-btn" class="btn-game" onclick="revealAnswer()">정답</button>
+    </div>
+</div>
+<div id="inventory-container" onclick="event.stopPropagation()">
+    <div id="tile-pool" class="inventory-grid"></div>
+</div>
+
+<div id="review-modal" class="modal">
+    <div class="modal-content">
+        <h3>후기 남기기</h3>
+        <div id="star-input" style="font-size:1.5rem; margin-bottom:15px; color:var(--secondary);">
+            <span onclick="setStar(1)" style="cursor:pointer">☆</span><span onclick="setStar(2)" style="cursor:pointer">☆</span><span onclick="setStar(3)" style="cursor:pointer">☆</span><span onclick="setStar(4)" style="cursor:pointer">☆</span><span onclick="setStar(5)" style="cursor:pointer">☆</span>
+        </div>
+        <textarea id="review-text" rows="3" placeholder="의견을 남겨주세요!"></textarea>
+        <button class="btn-main" onclick="submitReview()">제출</button>
+        <button class="btn-sub" onclick="closeModal('review-modal')">취소</button>
+    </div>
+</div>
+
+<script>
+    /* --- Firebase Config --- */
+    const firebaseConfig = {
+        apiKey: "AIzaSyD6xJKL3wVZKiQMedMkN0wF1zmTeEpKa6s",
+        authDomain: "wordpiece-609c1.firebaseapp.com",
+        projectId: "wordpiece-609c1",
+        storageBucket: "wordpiece-609c1.firebasestorage.app",
+        messagingSenderId: "652904425244",
+        appId: "1:652904425244:web:dc77b5f5b16e849824fcd9",
+        databaseURL: "https://wordpiece-609c1-default-rtdb.firebaseio.com/"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let currentUser = null, currentNick = "", rating = 0;
+
+    /* --- 단어장 데이터 (PD님 검수본) --- */
+    const wordPool = {
+        3: ["고구마", "사이다", "바나나", "코끼리", "도서관", "자동차", "자판기", "비행기", "다람쥐", "냉장고", "도시락", "무지개", "금메달", "박물관", "소방차", "구급차", "경찰차", "솜사탕", "종이컵", "목걸이", "귀걸이", "지팡이", "주머니", "돋보기", "신호등", "운동화", "손거울", "복사기", "전화기", "계산기", "선풍기", "세탁기", "청소기", "가습기", "제습기", "온도계", "습도계", "망원경", "현미경", "지구본", "나침반", "슬리퍼", "머리띠", "귀마개", "손수건", "비누곽", "샴푸통", "주차장", "편의점", "정류장"],
+        4: ["고진감래", "감언이설", "동문서답", "사필귀정", "오리무중", "이심전심", "전화위복", "함흥차사", "유비무환", "작심삼일", "일석이조", "탁상공론", "결자해지", "권선징악", "자화자찬", "초지일관", "타산지석", "화룡점정", "대기만성", "낭중지물", "천고마비", "설상가상", "오매불망", "외유내강", "살신성인", "호가호위", "개과천선", "백발백중", "안하무인", "막상막하", "청천벽력", "금상첨화", "일편단심", "죽마고우", "온고지신", "사면초가", "천재일우", "명불허전", "풍전등화", "고군분투", "동고동락", "와신상담", "전전반측", "각골난망", "노심초사", "허장성세", "난형난제", "파죽지세", "승승장구", "다재다능"],
+        5: ["팔만대장경", "가야금산조", "거문고독주", "독립문광장", "무궁화동산", "석굴암불상", "첨성대구조", "한글날기념", "자율주행차", "태양에너지", "인공지능실", "빅데이터학", "메타버스실", "블록체인망", "알고리즘법", "인터페이스", "애니메이션", "디지털영상", "카메라기법", "원격제어기", "항공우주국", "기상관측선", "수력발전소", "로봇공학자", "나노기술력", "생체인식기", "유전공학자", "전기자동차", "탄소중립제", "지구온난화", "환경보호법", "유기농산물", "초고속통신", "위성방송국", "지적재산권", "국민권익위", "국가인권위", "방송통신위", "공정거래위", "금융위원회", "세종특별시", "제주특별도", "한반도지도", "경제발전사", "평화통일안", "문화유산법", "지방자치제", "정보통신망", "가상현실관", "태권도도복"],
+        6: ["직지심체요절", "불국사다보탑", "경복궁근정전", "수원화성성벽", "안동하회마을", "한라산백록담", "지리산천왕봉", "설악산대청봉", "낙동강삼각주", "전주한옥마을", "공주무령왕릉", "신라금관장식", "빗살무늬토기", "고인돌유적지", "훈민정음판본", "용비어천가집", "월인천강지곡", "삼국사기본기", "동의보감원본", "징비록전쟁사", "구운몽소설집", "양자역학이론", "상대성이론집", "원소주기율표", "블랙홀관측망", "인공위성궤도", "판구조론학설", "분자생물학자", "정보통신기술", "기초과학연구", "유전자재조합", "기후변화협약", "재생에너지원", "전기전자공학", "토목건축공학", "화학공학기술", "기계자동차학", "항공우주공학", "원자력에너지", "시스템반도체", "모바일통신망", "백자달항아리", "고려청자매병", "해양수산자원", "국제협력기구", "국민연금공단", "환경오염실태", "초정밀현미경", "대륙이동학설", "우주팽창이론"],
+        7: ["훈민정음해례본", "국립중앙박물관", "국립현대미술관", "민주공화국헌법", "경국대전주해본", "대동여지도원본", "고려사절요본기", "동학농민혁명사", "독립신문발간회", "광복군총사령부", "헌법재판소소장", "대법원전원합의", "서울특별시의회", "국가인권위원회", "방송통신위원회", "공정거래위원회", "금융위원회위원", "권익위원회위원", "원자력안전위원", "개인정보보호법", "세종특별자치시", "제주특별자치도", "한반도비핵화안", "세계문화유산지", "동남아국가연합", "유럽연합이사회", "아랍연맹회원국", "석유수출국기구", "아시아개발은행", "미주개발은행장", "국제형사재판소", "국제사법재판소", "상설중재재판소", "세계지식재산권", "세계보건기구장", "국제원자력기구", "국제적십자연맹", "한국수자원공사", "한국농어촌공사", "불국사삼층석탑", "고구려강서대묘", "발해상경용천부", "백제금동대향로", "세계무역기구장", "국제통화기금장", "한국기자협회원", "한국수력원자력", "도로교통법규집", "고용보험법령집", "동계올림픽대회"]
+    };
+
+    const rotateMap = { 'ㄱ':'ㄴ', 'ㄴ':'ㄱ', 'ㅏ':'ㅓ', 'ㅓ':'ㅗ', 'ㅗ':'ㅜ', 'ㅜ':'ㅏ', 'ㅣ':'ㅡ', 'ㅡ':'ㅣ' };
+    const mergeMap = { 'ㄱㄱ':'ㄲ', 'ㄷㄷ':'ㄸ', 'ㅂㅂ':'ㅃ', 'ㅅㅅ':'ㅆ', 'ㅈㅈ':'ㅉ', 'ㅏㅣ':'ㅐ', 'ㅓㅣ':'ㅔ', 'ㅗㅏ':'ㅘ', 'ㅗㅣ':'ㅚ', 'ㅜㅓ':'ㅝ', 'ㅜㅣ':'ㅟ', 'ㅡㅣ':'ㅢ' };
+    const baseMap = { 'ㄲ':['ㄱ','ㄱ'], 'ㄸ':['ㄷ','ㄷ'], 'ㅃ':['ㅂ','ㅂ'], 'ㅆ':['ㅅ','ㅅ'], 'ㅉ':['ㅈ','ㅈ'], 'ㅐ':['ㅏ','ㅣ'], 'ㅔ':['ㅓ','ㅣ'], 'ㅚ':['ㅗ','ㅣ'], 'ㅟ':['ㅜ','ㅣ'], 'ㅢ':['ㅡ','ㅣ'], 'ㅘ':['ㅗ','ㅏ'], 'ㅝ':['ㅜ','ㅓ'] };
+    const getBaseType = (bit) => (bit==='ㄴ'?'ㄱ':(['ㅓ','ㅗ','ㅜ'].includes(bit)?'ㅏ':(bit==='ㅡ'?'ㅣ':bit)));
+    const CHOSUNG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+    const JUNGSUNG = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
+    const JONGSUNG = ['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+
+    /* --- Auth Logic --- */
+    function toggleAuth(is) { document.getElementById('login-box').style.display = is ? 'none' : 'block'; document.getElementById('signup-box').style.display = is ? 'block' : 'none'; }
+    
+    function handleSignup() {
+        const id = document.getElementById('signup-id').value.trim().toLowerCase();
+        const nick = document.getElementById('signup-nick').value.trim();
+        const pw = document.getElementById('signup-pw').value;
+        if(!id || !nick || pw.length < 4) return alert("입력 정보를 확인해 주세요.");
+        
+        db.ref('users/' + id).once('value').then(s => {
+            if(s.exists()) return alert("이미 가입된 ID입니다.");
+            db.ref('users/' + id).set({ pw, nickname: nick, progress: { 3:1, 4:1, 5:1, 6:1, 7:1 } }).then(() => {
+                alert("가입 성공! 로그인 해주세요."); toggleAuth(false);
+            });
+        });
+    }
+
+    function handleLogin() {
+        const id = document.getElementById('login-id').value.trim().toLowerCase();
+        const pw = document.getElementById('login-pw').value;
+        if(id === "yun" && pw === "1020") return renderAdmin();
+        
+        db.ref('users/' + id).once('value').then(s => {
+            if(s.exists() && s.val().pw === pw) {
+                currentUser = id; currentNick = s.val().nickname; showMenu();
+            } else alert("아이디 혹은 비번이 틀립니다.");
+        });
+    }
+
+    function showMenu() {
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('menu-screen').style.display = 'flex';
+        document.getElementById('user-info').textContent = `${currentNick}님 환영합니다!`;
+        db.ref('users/' + currentUser).on('value', s => {
+            const u = s.val();
+            if(u) for(let i=3; i<=7; i++) document.getElementById(`rec-${i}`).textContent = `ST ${u.progress[i]}`;
+        });
+    }
+
+    /* --- Admin Panel --- */
+    function renderAdmin() {
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('admin-screen').style.display = 'flex';
+        db.ref('users').once('value').then(s => {
+            let html = "<h4>유저 진도 현황</h4>";
+            Object.entries(s.val()).forEach(([id, u]) => {
+                html += `<div><b>${u.nickname}</b>(${id}): ${JSON.stringify(u.progress)}</div>`;
+            });
+            db.ref('reviews').once('value').then(rs => {
+                html += "<h4 style='margin-top:20px'>유저 별점/후기</h4>";
+                if(rs.exists()) Object.values(rs.val()).forEach(r => {
+                    html += `<div>[${r.stars}점] ${r.nick}: ${r.text}</div>`;
+                });
+                document.getElementById('admin-data-list').innerHTML = html;
+            });
+        });
+    }
+
+    function copyInvite() { navigator.clipboard.writeText(window.location.href); alert("초대 링크가 복사되었습니다!"); }
+
+    /* --- Review Logic --- */
+    function openReview() { document.getElementById('review-modal').style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function setStar(n) { rating = n; const spans = document.getElementById('star-input').children; for(let i=0; i<5; i++) spans[i].textContent = i < n ? "★" : "☆"; }
+    function submitReview() {
+        if(rating === 0) return alert("별점을 선택해 주세요!");
+        db.ref('reviews').push({ nick: currentNick, stars: rating, text: document.getElementById('review-text').value.trim() || "내용 없음" }).then(() => {
+            alert("후기 감사합니다!"); closeModal('review-modal');
+        });
+    }
+
+    /* --- Game Logic --- */
+    let targetWord = "", inventory = [], currentGuess = [], selectedIdx = null, curLevel = 3;
+    let attempts = 0, hintsUsed = 0;
+
+    function startGame(level) {
+        curLevel = level;
+        document.getElementById('menu-screen').style.display = 'none';
+        document.getElementById('game-header').style.display = 'flex';
+        document.getElementById('main-content').style.display = 'flex';
+        document.getElementById('inventory-container').style.display = 'block';
+        initRound();
+    }
+
+    function initRound() {
+        db.ref('users/' + currentUser + '/progress/' + curLevel).once('value').then(s => {
+            const stage = s.val() || 1;
+            targetWord = wordPool[curLevel][(stage - 1) % 50];
+            attempts = 0; hintsUsed = 0; updateStats();
+            
+            const rawTiles = {};
+            for(let char of targetWord) {
+                const code = char.charCodeAt(0) - 0xAC00;
+                const sp = { cho: CHOSUNG[Math.floor(code/588)], jung: JUNGSUNG[Math.floor((code%588)/28)], jong: JONGSUNG[code%28] };
+                [sp.cho, sp.jung, sp.jong].forEach(j => { if(!j) return; const m = baseMap[j] || j; (Array.isArray(m)?m:[m]).forEach(bit => { const r = getBaseType(bit); rawTiles[r] = (rawTiles[r]||0)+1; }); });
+            }
+            inventory = Object.entries(rawTiles).map(([type, count]) => ({ type, shape: type, count }));
+            currentGuess = Array.from({length: targetWord.length}, () => ({cho:'', jung:'', jong:'', status:''}));
+            selectedIdx = null; 
+            document.getElementById('cur-stage-txt').textContent = `STAGE ${stage}`;
+            render();
+        });
+    }
+
+    function updateStats() {
+        document.getElementById('stat-attempts').textContent = attempts;
+        document.getElementById('stat-hints').textContent = hintsUsed;
+    }
+
+    function render() {
+        const poolEl = document.getElementById('tile-pool'); poolEl.innerHTML = '';
+        inventory.forEach((item, idx) => {
+            const tile = document.createElement('div');
+            tile.className = `tile ${item.count <= 0 ? 'disabled' : ''} ${selectedIdx === idx ? 'selected' : ''}`;
+            tile.innerHTML = `<b>${item.shape}</b><span>${item.count}</span>`;
+            tile.onclick = (e) => { e.stopPropagation(); if(selectedIdx === idx) { const next = rotateMap[item.shape]; if(next) { item.shape = next; render(); } } else if(item.count > 0) { selectedIdx = idx; render(); } };
+            poolEl.appendChild(tile);
+        });
+
+        const gridEl = document.getElementById('answer-grid'); gridEl.innerHTML = '';
+        currentGuess.forEach((char, i) => {
+            const box = document.createElement('div');
+            box.className = `char-box ${char.status ? 'res-' + char.status : ''}`;
+            ['cho','jung','jong'].forEach(t => {
+                const s = document.createElement('div'); s.className = `slot ${char[t] ? 'filled' : ''}`; s.textContent = char[t];
+                box.appendChild(s);
+            });
+            box.onclick = (e) => {
+                e.stopPropagation();
+                if(selectedIdx !== null) {
+                    const it = inventory[selectedIdx];
+                    const targetPart = !char.cho ? 'cho' : (!char.jung ? 'jung' : 'jong');
+                    if(!char.jong) {
+                        if(char[targetPart]) {
+                            const res = mergeMap[char[targetPart] + it.shape] || mergeMap[it.shape + char[targetPart]];
+                            if(res) { char[targetPart] = res; it.count--; if(it.count <= 0) selectedIdx = null; render(); }
+                        } else { char[targetPart] = it.shape; it.count--; if(it.count <= 0) selectedIdx = null; render(); }
+                    }
+                } else {
+                    // [도로 빼기] 회수 로직
+                    ['cho','jung','jong'].forEach(t => {
+                        if(char[t]) {
+                            const comps = baseMap[char[t]] || char[t];
+                            (Array.isArray(comps) ? comps : [comps]).forEach(c => {
+                                const r = getBaseType(c);
+                                const inv = inventory.find(invIt => invIt.type === r);
+                                if(inv) inv.count++;
+                            });
+                            char[t] = '';
+                        }
+                    });
+                    char.status = ''; render();
+                }
+            };
+            gridEl.appendChild(box);
+        });
+    }
+
+    function deselectTile() { selectedIdx = null; render(); }
+
+    function submitGuess() {
+        let guessArr = [];
+        for(let i=0; i<currentGuess.length; i++) {
+            const {cho, jung, jong} = currentGuess[i]; if(!cho || !jung) return alert("글자를 완성해 주세요!");
+            guessArr.push(String.fromCharCode(0xAC00 + (CHOSUNG.indexOf(cho)*588) + (JUNGSUNG.indexOf(jung)*28) + JONGSUNG.indexOf(jong)));
+        }
+        
+        attempts++; updateStats();
+        let tempT = targetWord.split('');
+        guessArr.forEach((g, i) => { if(g === targetWord[i]) { currentGuess[i].status = 'correct'; tempT[i] = null; } });
+        guessArr.forEach((g, i) => { 
+            if(currentGuess[i].status !== 'correct') { 
+                const fIdx = tempT.indexOf(g);
+                if(fIdx !== -1) { currentGuess[i].status = 'present'; tempT[fIdx] = null; } 
+                else currentGuess[i].status = 'absent'; 
+            } 
+        });
+        render();
+        if(guessArr.join('') === targetWord) { 
+            setTimeout(() => { 
+                alert("🎉 정답입니다!"); 
+                db.ref('users/' + currentUser + '/progress/' + curLevel).transaction(s => (s || 1) + 1);
+                initRound(); 
+            }, 100);
+        }
+    }
+
+    function giveHint() { hintsUsed++; updateStats(); alert(`첫 글자 힌트: "${targetWord[0]}"`); }
+    function goBack() { document.getElementById('game-header').style.display = 'none'; document.getElementById('main-content').style.display = 'none'; document.getElementById('inventory-container').style.display = 'none'; showMenu(); }
+    function revealAnswer() { if(confirm(`정답: [ ${targetWord} ]\n다음으로 넘어갈까요?`)) { 
+        db.ref('users/' + currentUser + '/progress/' + curLevel).transaction(s => (s || 1) + 1);
+        initRound(); 
+    } }
+</script>
+</body>
+</html>
