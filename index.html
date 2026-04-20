@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>언어의 조각</title>
+    <style>
+        :root {
+            --bg: #0d0d0d; --card: #1c1c1c; --text: #f0f0f0;
+            --primary: #3498db; --correct: #2ecc71; --present: #f1c40f; --absent: #e74c3c;
+            --secondary: #9b59b6; --overlay: rgba(0,0,0,0.98);
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Pretendard', sans-serif; }
+        body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+        
+        button { cursor: pointer; border: none; font-weight: bold; border-radius: 12px; transition: 0.2s; }
+        input { background: #222; border: 1px solid #444; color: #fff; padding: 14px; border-radius: 10px; width: 100%; margin-bottom: 12px; font-size: 1rem; }
+
+        /* 인증 화면 */
+        .full-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: var(--bg); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 2000; padding: 20px; }
+        .auth-card { background: var(--card); border: 1px solid #333; padding: 30px; border-radius: 25px; width: 100%; max-width: 350px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .auth-card h1 { color: var(--primary); margin: 0 0 20px; font-size: 2rem; font-weight: 900; }
+        .auth-toggle { font-size: 0.85rem; color: #888; margin-top: 15px; text-decoration: underline; cursor: pointer; }
+
+        /* 메뉴 화면 */
+        #menu-screen { display: none; }
+        .level-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 340px; margin-top: 20px; }
+        .lvl-btn { padding: 22px; background: var(--card); border: 1px solid #444; color: #fff; border-radius: 15px; font-size: 1.1rem; }
+        .lvl-btn span { display: block; font-size: 0.75rem; color: var(--primary); margin-top: 6px; font-weight: normal; }
+
+        /* 관리자 화면 */
+        #admin-screen { display: none; overflow-y: auto; }
+        .admin-box { width: 100%; max-width: 400px; background: #111; padding: 25px; border-radius: 20px; border: 1px solid #333; }
+
+        /* 게임 화면 */
+        header { padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; background: #111; flex-shrink: 0; }
+        header h1 { margin: 0; font-size: 1.1rem; color: var(--primary); font-weight: 900; }
+        .header-btns { display: flex; gap: 8px; }
+        .icon-btn { background: #333; color: #eee; border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; }
+
+        #main-content { flex: 1; display: none; flex-direction: column; justify-content: center; align-items: center; padding: 10px; gap: 10px; overflow-y: auto; }
+        #game-stats { font-size: 0.75rem; color: #888; margin-bottom: 5px; }
+        #game-stats b { color: var(--primary); }
+
+        #answer-grid { display: flex; gap: 5px; justify-content: center; flex-wrap: wrap; width: 100%; }
+        .char-box { display: flex; flex-direction: column; gap: 3px; padding: 6px; background: var(--card); border-radius: 10px; width: 48px; border: 1.5px solid #333; transition: 0.3s; }
+        .slot { height: 30px; background: #222; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: bold; border: 1px dashed #444; }
+        .slot.filled { background: #333; border: 1.5px solid var(--primary); }
+
+        .res-correct { background: var(--correct) !important; border-color: var(--correct) !important; }
+        .res-present { background: var(--present) !important; border-color: var(--present) !important; }
+        .res-absent { background: var(--absent) !important; border-color: var(--absent) !important; }
+        .res-correct .slot, .res-present .slot, .res-absent .slot { background: rgba(0,0,0,0.15) !important; border: none !important; }
+
+        .inventory-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; max-width: 420px; margin: 0 auto; }
+        .tile { aspect-ratio: 1/1; background: #2a2a2a; border: 1px solid #444; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .tile.selected { border: 2px solid var(--primary); background: #333; transform: translateY(-3px); }
+        .tile-val { font-size: 1.2rem; font-weight: bold; }
+        .tile-count { font-size: 0.65rem; color: var(--primary); margin-top: 2px; }
+
+        .modal { position: fixed; top:0; left:0; width:100%; height:100%; background: var(--overlay); display: none; justify-content: center; align-items: center; z-index: 3000; padding: 20px; }
+        .modal-content { background: #1a1a1a; border: 1px solid #444; border-radius: 25px; width: 100%; max-width: 340px; padding: 25px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div id="auth-screen" class="full-screen">
+    <div class="auth-card" id="login-box">
+        <h1>LOGIN</h1>
+        <input type="text" id="login-id" placeholder="Nickname (English)">
+        <input type="password" id="login-pw" placeholder="4-digit PIN" maxlength="4" inputmode="numeric">
+        <button onclick="handleLogin()" style="width:100%; padding:16px; background:var(--primary); color:#fff;">로그인</button>
+        <div class="auth-toggle" onclick="toggleAuth(true)">계정이 없으신가요? 회원가입</div>
+    </div>
+    <div class="auth-card" id="signup-box" style="display:none;">
+        <h1>SIGN UP</h1>
+        <input type="text" id="signup-id" placeholder="Nickname (English)">
+        <input type="password" id="signup-pw" placeholder="4-digit PIN" maxlength="4" inputmode="numeric">
+        <input type="password" id="signup-pw2" placeholder="Confirm PIN" maxlength="4" inputmode="numeric">
+        <button onclick="handleSignup()" style="width:100%; padding:16px; background:var(--secondary); color:#fff;">가입 완료</button>
+        <div class="auth-toggle" onclick="toggleAuth(false)">이미 계정이 있나요? 로그인</div>
+    </div>
+</div>
+
+<div id="menu-screen" class="full-screen">
+    <h1 style="color:var(--primary); margin:0;">언어의 조각</h1>
+    <p id="user-info" style="color:#777; font-size:0.9rem; margin-bottom:20px;"></p>
+    <div class="level-btns">
+        <button class="lvl-btn" onclick="startGame(3)">3글자<span id="rec-3">스테이지 1</span></button>
+        <button class="lvl-btn" onclick="startGame(4)">4글자<span id="rec-4">스테이지 1</span></button>
+        <button class="lvl-btn" onclick="startGame(5)">5글자<span id="rec-5">스테이지 1</span></button>
+        <button class="lvl-btn" onclick="startGame(6)">6글자<span id="rec-6">스테이지 1</span></button>
+        <button class="lvl-btn" style="grid-column: span 2;" onclick="startGame(7)">7글자 무제한<span id="rec-7">스테이지 1</span></button>
+        <button onclick="copyShare()" style="background:#444; color:#fff; padding:15px;">🔗 링크 공유</button>
+        <button onclick="location.reload()" style="background:#c0392b; color:#fff; padding:15px;">🚪 로그아웃</button>
+    </div>
+</div>
+
+<div id="admin-screen" class="full-screen">
+    <div class="admin-box">
+        <h2 style="color:var(--primary); text-align:center;">📊 플레이어 현황 (로컬)</h2>
+        <div id="admin-list" style="font-size:0.8rem; line-height:1.6; color:#bbb; max-height:300px; overflow-y:auto;"></div>
+        <button onclick="location.reload()" style="width:100%; margin-top:20px; padding:15px; background:#444; color:#fff;">나가기</button>
+    </div>
+</div>
+
+<header id="game-header" style="display:none;">
+    <h1>언어의 조각</h1>
+    <div class="header-btns">
+        <button class="icon-btn" onclick="goBack()">나가기</button>
+        <button class="icon-btn" id="help-btn">?</button>
+    </div>
+</header>
+<div id="main-content">
+    <div id="game-stats">시도: <b id="stat-attempts">0</b> | 힌트: <b id="stat-hints">0</b> | <span id="cur-stage-txt"></span></div>
+    <div id="msg" style="height:24px; font-weight:bold; color:var(--primary);"></div>
+    <div id="answer-grid"></div>
+    <div style="display:flex; gap:10px; width:100%; max-width:340px; margin-top:15px;">
+        <button id="hint-btn" style="flex:1; padding:14px; background:var(--secondary); color:#fff;">힌트</button>
+        <button id="submit-btn" style="flex:1.8; padding:14px; background:var(--primary); color:#fff; font-size:1.1rem;">등록</button>
+        <button id="reveal-btn" style="flex:1; padding:14px; background:#444; color:#fff;">정답</button>
+    </div>
+</div>
+<div id="inventory-container" style="display:none; background:#111; border-top:1px solid #333; padding:15px 10px 35px; flex-shrink:0;">
+    <div id="tile-pool" class="inventory-grid"></div>
+</div>
+
+<div id="hint-modal" class="modal"><div class="modal-content"><h2 style="color:var(--secondary);">💡 힌트</h2><div id="hint-text" style="font-size:1.3rem; margin:25px 0; font-weight:bold;"></div><button onclick="closeModal('hint-modal')" style="width:100%; padding:15px; background:var(--primary); color:#fff;">확인</button></div></div>
+<div id="guide-modal" class="modal"><div class="modal-content" style="text-align:left; font-size:0.85rem;"><h2 style="color:var(--primary); text-align:center;">🧩 게임 가이드</h2><p>1. <b>회전:</b> 선택 후 한 번 더 클릭 (ㄱ↔ㄴ / ㅣ↔ㅡ 만 가능)</p><p>2. <b>조합:</b> 이미 채워진 칸에 다른 타일을 들고 클릭 (ㅏ+ㅣ=ㅐ / ㄱ+ㄱ=ㄲ 등)</p><p>3. <b>회수:</b> 선택된 타일이 없을 때 채워진 칸을 클릭</p><button onclick="closeModal('guide-modal')" style="width:100%; margin-top:10px; padding:15px; background:var(--primary); color:#fff;">시작하기</button></div></div>
+
+<script>
+    /* --- 1. 유저 데이터 로직 (LocalStorage) --- */
+    const DB_KEY = "LANG_PIECE_V1_2026";
+    let currentUser = null;
+    const getDB = () => JSON.parse(localStorage.getItem(DB_KEY)) || {};
+    const saveDB = (db) => localStorage.setItem(DB_KEY, JSON.stringify(db));
+
+    function toggleAuth(is) { document.getElementById('login-box').style.display = is ? 'none' : 'block'; document.getElementById('signup-box').style.display = is ? 'block' : 'none'; }
+    
+    function handleSignup() {
+        const id = document.getElementById('signup-id').value.trim();
+        const pw = document.getElementById('signup-pw').value;
+        const pw2 = document.getElementById('signup-pw2').value;
+        const db = getDB();
+        if(!/^[a-zA-Z]+$/.test(id)) return alert("닉네임은 영문으로만 입력하세요.");
+        if(pw.length !== 4 || isNaN(pw)) return alert("비밀번호는 숫자 4자리여야 합니다.");
+        if(pw !== pw2) return alert("비밀번호 확인이 틀립니다.");
+        if(db[id]) return alert("이미 있는 닉네임입니다.");
+        db[id] = { pw, progress: { 3:1, 4:1, 5:1, 6:1, 7:1 } };
+        saveDB(db); alert("가입 완료! 로그인하세요."); toggleAuth(false);
+    }
+
+    function handleLogin() {
+        const id = document.getElementById('login-id').value.trim();
+        const pw = document.getElementById('login-pw').value;
+        const db = getDB();
+        if(id === "yun" && pw === "1020") return showAdmin();
+        if(db[id] && db[id].pw === pw) { currentUser = id; showMenu(); }
+        else alert("정보가 일치하지 않습니다.");
+    }
+
+    function showAdmin() {
+        const db = getDB();
+        const list = document.getElementById('admin-list');
+        list.innerHTML = Object.entries(db).map(([id, info]) => `<div><b>${id}</b> (PW:${info.pw}) - ST:${JSON.stringify(info.progress)}</div>`).join("<hr style='border:0.5px solid #222'>");
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('admin-screen').style.display = 'flex';
+    }
+
+    function showMenu() {
+        const user = getDB()[currentUser];
+        document.getElementById('auth-screen').style.display = 'none';
+        document.getElementById('menu-screen').style.display = 'flex';
+        document.getElementById('user-info').innerHTML = `<b>${currentUser}</b>님 환영합니다!`;
+        for(let i=3; i<=7; i++) document.getElementById(`rec-${i}`).textContent = `스테이지 ${user.progress[i]}`;
+    }
+
+    /* --- 2. 게임 엔진 로직 --- */
+    const wordPool = {
+        3: ["금메달", "무지개", "도시락", "고구마", "박물관", "코끼리", "자판기", "거북이", "소나기", "해바라기"],
+        4: ["삯바느질", "우리나라", "모래시계", "일기예보", "사막여우", "주차요원", "유리구두", "지하철역", "고객센터"],
+        5: ["시간외근무", "도깨비방망이", "아침해돋이", "북극곰사냥", "별헤는밤에", "정보통신부", "나비넥타이"],
+        6: ["국제관세협정", "초록색나뭇잎", "동해물과백두", "우주정거장역", "대한민국만세", "할아버지댁에"],
+        7: ["광개토대왕릉비", "독도는우리땅이다", "아름다운우리강산", "세종대왕훈민정음", "컴퓨터그래픽디자인"]
+    };
+
+    const rotateMap = { 'ㄱ':'ㄴ', 'ㄴ':'ㄱ', 'ㅏ':'ㅓ', 'ㅓ':'ㅗ', 'ㅗ':'ㅜ', 'ㅜ':'ㅏ', 'ㅣ':'ㅡ', 'ㅡ':'ㅣ' };
+    const mergeMap = { 'ㄱㄱ':'ㄲ', 'ㄷㄷ':'ㄸ', 'ㅂㅂ':'ㅃ', 'ㅅㅅ':'ㅆ', 'ㅈㅈ':'ㅉ', 'ㅏㅣ':'ㅐ', 'ㅓㅣ':'ㅔ', 'ㅗㅏ':'ㅘ', 'ㅗㅣ':'ㅚ', 'ㅜㅓ':'ㅝ', 'ㅜㅣ':'ㅟ', 'ㅡㅣ':'ㅢ', 'ㅑㅣ':'ㅒ', 'ㅕㅣ':'ㅖ', 'ㅘㅣ':'ㅙ', 'ㅝㅣ':'ㅞ', 'ㄱㅅ':'ㄳ', 'ㄴㅈ':'ㄵ', 'ㄴㅎ':'ㄶ', 'ㄹㄱ':'ㄺ', 'ㄹㅁ':'ㄻ', 'ㄹㅂ':'ㄼ', 'ㄹㅅ':'ㄽ', 'ㄹㅌ':'ㄾ', 'ㄹㅍ':'ㄿ', 'ㄹㅎ':'ㅀ', 'ㅂㅅ':'ㅄ' };
+    const baseMap = { 'ㄲ':['ㄱ','ㄱ'], 'ㄸ':['ㄷ','ㄷ'], 'ㅃ':['ㅂ','ㅂ'], 'ㅆ':['ㅅ','ㅅ'], 'ㅉ':['ㅈ','ㅈ'], 'ㅐ':['ㅏ','ㅣ'], 'ㅔ':['ㅓ','ㅣ'], 'ㅚ':['ㅗ','ㅣ'], 'ㅟ':['ㅜ','ㅣ'], 'ㅢ':['ㅡ','ㅣ'], 'ㅒ':['ㅑ','ㅣ'], 'ㅖ':['ㅕ','ㅣ'], 'ㅘ':['ㅗ','ㅏ'], 'ㅝ':['ㅜ','ㅓ'], 'ㅙ':['ㅗ','ㅏ','ㅣ'], 'ㅞ':['ㅜ','ㅓ','ㅣ'], 'ㄳ':['ㄱ','ㅅ'], 'ㄴㅈ':['ㄴ','ㅈ'], 'ㄶ':['ㄴ','ㅎ'], 'ㄺ':['ㄹ','ㄱ'], 'ㄻ':['ㄹ','ㅁ'], 'ㄼ':['ㄹ','ㅂ'], 'ㄽ':['ㄹ','ㅅ'], 'ㄾ':['ㄹ','ㅌ'], 'ㄿ':['ㄹ','ㅍ'], 'ㅀ':['ㄹ','ㅎ'], 'ㅄ':['ㅂ','ㅅ'], 'ㄴ':'ㄱ', 'ㅓ':'ㅏ', 'ㅗ':'ㅏ', 'ㅜ':'ㅏ', 'ㅡ':'ㅣ', 'ㅕ':'ㅑ', 'ㅛ':'ㅑ', 'ㅠ':'ㅑ' };
+
+    const CHOSUNG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+    const JUNGSUNG = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
+    const JONGSUNG = ['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+
+    let curLevel = 3, targetWord = "", inventory = [], currentGuess = [], selectedIdx = null, attempts = 0, hintsUsed = 0;
+    const gridEl = document.getElementById('answer-grid'), poolEl = document.getElementById('tile-pool'), msgEl = document.getElementById('msg');
+
+    function startGame(level) {
+        curLevel = level;
+        document.getElementById('menu-screen').style.display = 'none';
+        document.getElementById('game-header').style.display = 'flex';
+        document.getElementById('main-content').style.display = 'flex';
+        document.getElementById('inventory-container').style.display = 'block';
+        initRound();
+        document.getElementById('guide-modal').style.display = 'flex';
+    }
+
+    function initRound() {
+        attempts = 0; hintsUsed = 0; updateStats();
+        const stage = getDB()[currentUser].progress[curLevel];
+        const pool = wordPool[curLevel];
+        targetWord = pool[(stage - 1) % pool.length];
+        const rawTiles = {};
+        for(let char of targetWord) {
+            const code = char.charCodeAt(0) - 0xAC00;
+            const sp = { cho: CHOSUNG[Math.floor(code/588)], jung: JUNGSUNG[Math.floor((code%588)/28)], jong: JONGSUNG[code%28] };
+            [sp.cho, sp.jung, sp.jong].forEach(j => { if(!j) return; const m = baseMap[j] || j; (Array.isArray(m)?m:[m]).forEach(bit => { const r = (bit==='ㄴ'?'ㄱ':(['ㅓ','ㅗ','ㅜ'].includes(bit)?'ㅏ':(bit==='ㅡ'?'ㅣ':(bit==='ㅕ'||bit==='ㅛ'||bit==='ㅠ'?'ㅑ':bit)))); rawTiles[r] = (rawTiles[r]||0)+1; }); });
+        }
+        inventory = Object.entries(rawTiles).map(([type, count]) => ({ type, shape: type, count }));
+        currentGuess = Array.from({length: targetWord.length}, () => ({cho:'', jung:'', jong:'', status:''}));
+        selectedIdx = null; document.getElementById('cur-stage-txt').textContent = `ST:${stage}`; render();
+    }
+
+    function render() {
+        poolEl.innerHTML = '';
+        inventory.forEach((item, idx) => {
+            const tile = document.createElement('div');
+            tile.className = `tile ${item.count <= 0 ? 'disabled' : ''} ${selectedIdx === idx ? 'selected' : ''}`;
+            tile.innerHTML = `<span class="tile-val">${item.shape}</span><span class="tile-count">${item.count}</span>`;
+            tile.onclick = (e) => { e.stopPropagation(); if(selectedIdx === idx) { const next = rotateMap[item.shape]; if(next) { item.shape = next; render(); } } else if(item.count > 0) { selectedIdx = idx; render(); } };
+            poolEl.appendChild(tile);
+        });
+
+        gridEl.innerHTML = '';
+        currentGuess.forEach((char, i) => {
+            const box = document.createElement('div'); box.className = `char-box ${char.status ? 'res-' + char.status : ''}`;
+            ['cho','jung','jong'].forEach(t => {
+                const s = document.createElement('div'); s.className = `slot ${char[t] ? 'filled' : ''}`; s.textContent = char[t];
+                s.onclick = (e) => {
+                    e.stopPropagation();
+                    if(selectedIdx !== null) {
+                        const it = inventory[selectedIdx];
+                        if(char[t]) {
+                            const res = mergeMap[char[t] + it.shape] || mergeMap[it.shape + char[t]];
+                            if(res) { char[t] = res; it.count--; if(it.count <= 0) selectedIdx = null; char.status = ''; render(); }
+                        } else { char[t] = it.shape; it.count--; if(it.count <= 0) selectedIdx = null; char.status = ''; render(); }
+                    } else if(char[t]) {
+                        const m = baseMap[char[t]] || char[t]; (Array.isArray(m)?m:[m]).forEach(mat => { const r = (mat==='ㄴ'?'ㄱ':(['ㅓ','ㅗ','ㅜ'].includes(mat)?'ㅏ':(mat==='ㅡ'?'ㅣ':(mat==='ㅕ'||mat==='ㅛ'||bit==='ㅠ'?'ㅑ':mat)))); const inv = inventory.find(it => it.type === r); if(inv) inv.count++; });
+                        char[t] = ''; char.status = ''; render();
+                    }
+                };
+                box.appendChild(s);
+            });
+            gridEl.appendChild(box);
+        });
+    }
+
+    document.getElementById('submit-btn').onclick = () => {
+        let guessArr = [];
+        for(let i=0; i<currentGuess.length; i++) {
+            const {cho, jung, jong} = currentGuess[i]; if(!cho || !jung) return alert("글자를 완성하세요!");
+            guessArr.push(String.fromCharCode(0xAC00 + (CHOSUNG.indexOf(cho)*588) + (JUNGSUNG.indexOf(jung)*28) + JONGSUNG.indexOf(jong)));
+        }
+        attempts++; updateStats();
+        let tempT = targetWord.split('');
+        guessArr.forEach((g, i) => { if(g === targetWord[i]) { currentGuess[i].status = 'correct'; tempT[i] = null; } else currentGuess[i].status = ''; });
+        guessArr.forEach((g, i) => { if(currentGuess[i].status !== 'correct') { if(tempT.includes(g)) { currentGuess[i].status = 'present'; tempT[tempT.indexOf(g)] = null; } else currentGuess[i].status = 'absent'; } });
+        render();
+        if(guessArr.join('') === targetWord) { const db = getDB(); db[currentUser].progress[curLevel]++; saveDB(db); alert("🎉 정답!"); initRound(); }
+    };
+
+    function updateStats() { document.getElementById('stat-attempts').textContent = attempts; document.getElementById('stat-hints').textContent = hintsUsed; }
+    function goBack() { document.getElementById('game-header').style.display = 'none'; document.getElementById('main-content').style.display = 'none'; document.getElementById('inventory-container').style.display = 'none'; showMenu(); }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function copyShare() { 
+        const url = window.location.href;
+        const msg = url.startsWith('file') ? "인터넷에 배포 후 공유해주세요!" : "초대 링크가 복사되었습니다!";
+        navigator.clipboard.writeText("🧩 언어의 조각\n지금 도전해보세요!\n\n" + url); alert(msg); 
+    }
+    document.getElementById('help-btn').onclick = () => document.getElementById('guide-modal').style.display = 'flex';
+    document.getElementById('hint-btn').onclick = () => { const idx = currentGuess.findIndex((c, i) => String.fromCharCode(0xAC00 + (CHOSUNG.indexOf(c.cho)*588) + (JUNGSUNG.indexOf(c.jung)*28) + JONGSUNG.indexOf(c.jong)) !== targetWord[i]); if(idx !== -1) { hintsUsed++; updateStats(); document.getElementById('hint-text').textContent = `${idx + 1}번째 글자는 '${targetWord[idx]}' 입니다.`; document.getElementById('hint-modal').style.display = 'flex'; } };
+    document.getElementById('reveal-btn').onclick = () => { if(confirm(`정답은 [ ${targetWord} ] 입니다. 넘길까요?`)) { const db = getDB(); db[currentUser].progress[curLevel]++; saveDB(db); initRound(); } };
+    document.addEventListener('click', () => { selectedIdx = null; render(); });
+</script>
+</body>
+</html>
